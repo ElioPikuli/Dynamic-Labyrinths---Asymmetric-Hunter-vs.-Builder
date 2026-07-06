@@ -1,0 +1,29 @@
+{
+    "HunterBot": {
+        "checkpoints": [
+            {
+                "steps": 198406,
+                "file_path": "results\\HunterBot_Run_09\\HunterBot\\HunterBot-198406.onnx",
+                "reward": 3.793562464416027,
+                "creation_time": 1782668619.400722,
+                "auxillary_file_paths": [
+                    "results\\HunterBot_Run_09\\HunterBot\\HunterBot-198406.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 198406,
+            "file_path": "results\\HunterBot_Run_09\\HunterBot.onnx",
+            "reward": 3.793562464416027,
+            "creation_time": 1782668619.400722,
+            "auxillary_file_paths": [
+                "results\\HunterBot_Run_09\\HunterBot\\HunterBot-198406.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "0.30.0",
+        "torch_version": "1.11.0+cpu"
+    }
+}

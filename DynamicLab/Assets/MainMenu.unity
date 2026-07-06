@@ -495,7 +495,7 @@ MonoBehaviour:
     m_InternalValue: 0
   puzzlePrefab: {fileID: 0}
   puzzleCount: 200
-  botPrefab: {fileID: 0}
+  botPrefab: {fileID: 229744293265897396, guid: 4c8439b7ded55604ba3d354197ec51f6, type: 3}
   numberOfBots: 15
   startGridPos: {x: 0, y: 0}
   endGridPos: {x: 0, y: 0}

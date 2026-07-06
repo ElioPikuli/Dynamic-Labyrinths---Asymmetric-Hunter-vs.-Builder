@@ -8,14 +8,20 @@ public class NetworkUI : MonoBehaviour
 
     void OnGUI()
     {
-        // FOOLPROOF SCALING: Fixed sizes so it doesn't blow up the PC screen!
         float scale = Application.isMobilePlatform ? 3.5f : 1.5f; 
         
         GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1));
 
-        // Shifted down and right to avoid the iPhone Notch and your Score text
         GUILayout.BeginArea(new Rect(60, 60, 350, 500));
         
+        // שכבת מגן: אם ה-NetworkManager חסר, אל תעשה כלום ותצא!
+        if (NetworkManager.Singleton == null)
+        {
+            GUILayout.Label("NetworkManager is missing from the scene!", new GUIStyle() { normal = new GUIStyleState() { textColor = Color.red } });
+            GUILayout.EndArea();
+            return;
+        }
+
         if (!NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsServer)
         {
             if (GUILayout.Button("PC: Start Host", GUILayout.Height(50))) 
