@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine.EventSystems;
 
-// 2. CHANGE 'MonoBehaviour' to 'NetworkBehaviour'
 public partial class MapGenerator : NetworkBehaviour
 {
     public enum MapType { RandomScatter, Maze_ARA, Caverns_LPA, Arena_DLite }
@@ -37,7 +36,6 @@ public partial class MapGenerator : NetworkBehaviour
     public int currentSeed;
     public bool useRandomSeed = true;
     
-    // 3. ADD THIS: The magic variable that syncs over Wi-Fi!
     public NetworkVariable<int> networkedSeed = new NetworkVariable<int>(0);
 
     [Header("Puzzle Settings")]
@@ -60,18 +58,25 @@ public partial class MapGenerator : NetworkBehaviour
 
 
     // ==========================================
-    // THE FIX: MAIN MENU BYPASS
+    // START - FOR MAIN MENU BACKGROUND MAP
     // ==========================================
     void Start()
     {
-        // If this is the Main Menu, we don't care about networking yet!
-        // Just instantly generate a map for the background camera.
         if (isMainMenu)
         {
+            // 1. קריאת הגדרות הגודל והסוג
+            mapSize = PlayerPrefs.GetInt("SavedMapSize", 100);
+            if (mapSize < 30) mapSize = 100;
+            
+            int savedMapType = PlayerPrefs.GetInt("SavedMapType", 0);
+            randomlySelectMapType = false;
+
             if (useRandomSeed) currentSeed = Random.Range(1000, 99999);
             Random.InitState(currentSeed);
 
-            if (randomlySelectMapType) currentMapType = (MapType)Random.Range(1, 4);
+            // 2. טיפול בבחירת ה-Random כדי שלא נקבל ביום ריק
+            if (savedMapType == 0) currentMapType = (MapType)Random.Range(1, 4);
+            else currentMapType = (MapType)savedMapType;
 
             switch (currentMapType)
             {
@@ -84,28 +89,36 @@ public partial class MapGenerator : NetworkBehaviour
             StartCoroutine(BuildMapRoutine());
         }
     }
-    // 4. REPLACE 'IEnumerator Start()' with 'OnNetworkSpawn()'
-    // This ensures the map waits to generate until the network is officially connected.
+
+    // ==========================================
+    // ON NETWORK SPAWN - FOR ACTUAL GAMEPLAY
+    // ==========================================
     public override void OnNetworkSpawn()
     {
-        // If this is the Main Menu, abort! The Start() method already built the map.
         if (isMainMenu) return;
-        // If this is the PC (Server), generate a random seed and share it to the network!
+
+        // קריאת ההגדרות למשחק האמיתי
+        mapSize = PlayerPrefs.GetInt("SavedMapSize", 100);
+        if (mapSize < 30) mapSize = 100;
+
+        int savedMapType = PlayerPrefs.GetInt("SavedMapType", 0);
+        randomlySelectMapType = false;
+
         if (IsServer)
         {
             if (useRandomSeed) networkedSeed.Value = Random.Range(1000, 99999);
             else networkedSeed.Value = currentSeed;
             Debug.Log("Server chose Map Seed: " + networkedSeed.Value);
         }
-        else // If this is the Phone (Client), log the seed we received!
+        else 
         {
             Debug.Log("Client received Map Seed: " + networkedSeed.Value);
         }
 
-        // Both devices now initialize their random math using the exact same synced seed
         Random.InitState(networkedSeed.Value);
 
-        if (randomlySelectMapType) currentMapType = (MapType)Random.Range(1, 4);
+        if (savedMapType == 0) currentMapType = (MapType)Random.Range(1, 4);
+        else currentMapType = (MapType)savedMapType;
 
         switch (currentMapType)
         {
@@ -115,11 +128,9 @@ public partial class MapGenerator : NetworkBehaviour
             case MapType.Arena_DLite: currentBiome = arenaDLiteBiome; break;
         }
 
-        // Start the generation process
         StartCoroutine(BuildMapRoutine());
     }
 
-    // 5. This is just the second half of your old Start() method, renamed.
     IEnumerator BuildMapRoutine()
     {
         GenerateMap();
@@ -139,7 +150,6 @@ public partial class MapGenerator : NetworkBehaviour
                 SpawnBots(pg);
             }
 
-            // If we are the Mobile Client, switch into 2D God-Mode!
             if (!IsServer) 
             {
                 SetupMobileCamera();
@@ -149,6 +159,19 @@ public partial class MapGenerator : NetworkBehaviour
 
     void GenerateMap()
     {
+        // ==========================================
+        // התיקון: יצירת בסיס פיזי עבה מתחת למפה (מונע נפילות)
+        // ==========================================
+        GameObject dynamicCollider = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        dynamicCollider.name = "Solid Physics Base";
+        // ממקמים את הקובייה בדיוק באמצע (0,0) אבל בחצי מטר מתחת לרצפה, כדי שהיא תתפוס את כל המפה
+        dynamicCollider.transform.position = new Vector3(0f, -0.5f, 0f);
+        // העובי שלה הוא 1 מטר, והגודל שלה מותאם בדיוק למשתנה mapSize
+        dynamicCollider.transform.localScale = new Vector3(mapSize, 1f, mapSize);
+        // מכבים את הנראות כדי שנראה רק את טקסטורות הרצפה שלך
+        dynamicCollider.GetComponent<MeshRenderer>().enabled = false;
+        // ==========================================
+
         grid = new bool[mapSize, mapSize];
         decoMap = new bool[mapSize, mapSize]; 
         
@@ -160,14 +183,12 @@ public partial class MapGenerator : NetworkBehaviour
             case MapType.Arena_DLite: GenerateArenaDLite(); break;
         }
 
-        // Borders
         for (int i = 0; i < mapSize; i++)
         {
             grid[i, 0] = true; grid[i, mapSize - 1] = true;
             grid[0, i] = true; grid[mapSize - 1, i] = true;
         }
 
-        // Plan Decorations
         if (currentBiome != null && currentBiome.decorationPrefabs != null && currentBiome.decorationPrefabs.Length > 0)
         {
             for (int x = 1; x < mapSize - 1; x++)
@@ -188,7 +209,6 @@ public partial class MapGenerator : NetworkBehaviour
                         if (isWideOpen && Random.Range(0, 100) < currentBiome.decorationChance)
                         {
                             decoMap[x, z] = true;
-                            // REMOVED: grid[x, z] = true; -> Trees are no longer solid walls!
                         }
                     }
                 }
@@ -205,7 +225,6 @@ public partial class MapGenerator : NetworkBehaviour
             {
                 Vector3 pos = new Vector3(x - offset + 0.5f, 0f, z - offset + 0.5f);
 
-                // Spawn Floors
                 if (currentBiome != null && currentBiome.floorPrefabs != null && currentBiome.floorPrefabs.Length > 0)
                 {
                     GameObject floorChoice = currentBiome.floorPrefabs[Random.Range(0, currentBiome.floorPrefabs.Length)];
@@ -221,7 +240,6 @@ public partial class MapGenerator : NetworkBehaviour
                     }
                     else Instantiate(wallPrefab, pos, Quaternion.identity, transform);
                 }
-                // Spawn Decorations on open floors
                 else if (decoMap[x, z])
                 {
                     GameObject decoChoice = currentBiome.decorationPrefabs[Random.Range(0, currentBiome.decorationPrefabs.Length)];
@@ -382,7 +400,6 @@ public partial class MapGenerator : NetworkBehaviour
         {
             for (int z = 1; z < mapSize - 1; z++) 
             {
-                // Must be an empty floor AND have no decorations!
                 if (!grid[x, z] && !decoMap[x, z]) 
                 {
                     allEmptyTiles.Add(new Vector2Int(x, z));
@@ -441,7 +458,13 @@ public partial class MapGenerator : NetworkBehaviour
         }
 
         float offset = mapSize / 2f;
-        player.transform.position = new Vector3(chosenStart.x - offset + 0.5f, 1f, chosenStart.y - offset + 0.5f);
+        Vector3 newPlayerPos = new Vector3(chosenStart.x - offset + 0.5f, 1f, chosenStart.y - offset + 0.5f);
+        
+        // עצירת פיזיקה כדי למנוע צבירת תאוצה במעבר
+        player.SetActive(false);
+        player.transform.position = newPlayerPos;
+        player.SetActive(true);
+
         destination.transform.position = new Vector3(chosenEnd.x - offset + 0.5f, 1f, chosenEnd.y - offset + 0.5f);
 
         startGridPos = chosenStart;
@@ -462,7 +485,6 @@ public partial class MapGenerator : NetworkBehaviour
         while (queue.Count > 0)
         {
             Vector2Int curr = queue.Dequeue();
-            // Only add to reachable if it doesn't have a decoration blocking a puzzle spawn
             if (!decoMap[curr.x, curr.y]) reachable.Add(curr);
 
             foreach (Vector2Int d in dirs)
@@ -472,7 +494,6 @@ public partial class MapGenerator : NetworkBehaviour
 
                 if (nx > 0 && nx < mapSize - 1 && ny > 0 && ny < mapSize - 1)
                 {
-                    // Flood fill completely ignores decorations (meaning the algorithm can walk through them)
                     if (!grid[nx, ny] && !visited[nx, ny])
                     {
                         visited[nx, ny] = true;
@@ -565,7 +586,6 @@ public partial class MapGenerator : NetworkBehaviour
 
     void SetupMobileCamera()
     {
-        // THE FIX: Find literally every camera in the scene and turn them ALL off.
         Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
         foreach (Camera c in allCameras)
         {
@@ -589,11 +609,10 @@ public partial class MapGenerator : NetworkBehaviour
         Cursor.visible = true;
     }
 
-    // Add this variable right above Update() to remember where the user started dragging
     private Vector3 dragOrigin;
     private Vector3 clickScreenPosition;
     private bool isDragging = false;
-    private float dragThreshold = 10f; // How many pixels the mouse must move to be considered a "drag"
+    private float dragThreshold = 10f; 
 
     void Update()
     {
@@ -608,7 +627,6 @@ public partial class MapGenerator : NetworkBehaviour
             Camera cam = Camera.main;
             if (cam == null) return;
 
-            // 1. WASD / ARROW KEY PANNING (PC Testing)
             float moveX = Input.GetAxis("Horizontal");
             float moveZ = Input.GetAxis("Vertical");
             if (moveX != 0 || moveZ != 0) 
@@ -616,14 +634,12 @@ public partial class MapGenerator : NetworkBehaviour
                 cam.transform.position += new Vector3(moveX, 0, moveZ) * 30f * Time.deltaTime;
             }
 
-            // 2. PC SCROLL WHEEL ZOOM
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (scroll != 0.0f)
             {
                 cam.orthographicSize -= scroll * 15f;
             }
 
-            // 3. MOBILE PINCH-TO-ZOOM
             if (Input.touchCount == 2)
             {
                 Touch touchZero = Input.GetTouch(0);
@@ -639,10 +655,8 @@ public partial class MapGenerator : NetworkBehaviour
                 cam.orthographicSize -= difference * 0.05f; 
             }
             
-            // Clamp Zoom so they can't break the camera
             cam.orthographicSize = Mathf.Clamp(cam.orthographicSize, 5f, (mapSize / 2f) + 5f);
 
-            // 4. PANNING & BUILDING (Only runs if they aren't pinching to zoom)
             if (Input.touchCount < 2)
             {
                 if (Input.GetMouseButtonDown(0)) 
@@ -685,8 +699,6 @@ public partial class MapGenerator : NetworkBehaviour
                 }
             }
 
-            // 5. CAMERA BOUNDARY LOCK
-            // Prevents the player from dragging the map off the screen!
             float boundaryLimit = mapSize / 2f;
             Vector3 clampedPos = cam.transform.position;
             clampedPos.x = Mathf.Clamp(clampedPos.x, -boundaryLimit, boundaryLimit);
@@ -698,7 +710,6 @@ public partial class MapGenerator : NetworkBehaviour
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public void RequestPlaceWallServerRpc(int x, int z)
     {
-        // The PC verifies if the move is legal
         if (!grid[x, z] && !decoMap[x, z]) 
         {
             ExecutePlaceWallClientRpc(x, z);
@@ -708,15 +719,12 @@ public partial class MapGenerator : NetworkBehaviour
     [Rpc(SendTo.Everyone)]
     public void ExecutePlaceWallClientRpc(int x, int z)
     {
-        // 1. Update the master math grid
         grid[x, z] = true;
 
-        // 2. Spawn the standard 3D visual wall
         float offset = mapSize / 2f;
         Vector3 spawnPos = new Vector3(x - offset + 0.5f, 0f, z - offset + 0.5f);
         Instantiate(wallPrefab, spawnPos, Quaternion.identity, transform);
 
-        // 3. Force the Pathfinding algorithms to recognize the new wall!
         PathfindingGrid pg = FindFirstObjectByType<PathfindingGrid>();
         if (pg != null) 
         {
