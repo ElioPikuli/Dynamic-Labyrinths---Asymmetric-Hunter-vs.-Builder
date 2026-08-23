@@ -115,6 +115,16 @@ public class LevelManager : NetworkBehaviour
     public void ReturnToMainMenu()
     {
         Time.timeScale = 1f;
+
+        if (NetworkManager.Singleton != null)
+        {
+            // THE FIX: Memorize the physical object BEFORE shutting down the network!
+            GameObject networkManagerObj = NetworkManager.Singleton.gameObject;
+            
+            NetworkManager.Singleton.Shutdown();
+            Destroy(networkManagerObj); // Safely destroy the memorized object
+        }
+
         SceneManager.LoadScene(0); 
     }
 
