@@ -1,6 +1,8 @@
 using UnityEngine;
+using Unity.Netcode; // ADDED: Required for network communication
 
-public class GameManager : MonoBehaviour
+// CHANGED: Must inherit from NetworkBehaviour to send messages across the network
+public class GameManager : NetworkBehaviour 
 {
     public static GameManager Instance;
     
@@ -12,14 +14,26 @@ public class GameManager : MonoBehaviour
         if (Instance == null) Instance = this;
     }
 
+    // The HunterAgent calls this method when the 3 seconds are up
     public void TriggerGameOver()
     {
-        // מדליק את מסך ההפסד ועוצר את הזמן (מקפיא את הבוטים)
+        // Security check: Only the Server (PC) is allowed to initiate a Game Over
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            TriggerGameOverRpc();
+        }
+    }
+
+    // This tag blasts the command to EVERY connected device (PC and Phone)
+    [Rpc(SendTo.Everyone)]
+    private void TriggerGameOverRpc()
+    {
+        // This will now activate the UI and freeze the bots on BOTH screens simultaneously!
         if (gameOverPanel != null) gameOverPanel.SetActive(true);
         Time.timeScale = 0f; 
     }
 
-    // פונקציה חדשה שרק מחזירה את הזמן לרוץ כרגיל
+    // Resumes time (useful for Restart / Next Map buttons)
     public void ResumeTime()
     {
         Time.timeScale = 1f;

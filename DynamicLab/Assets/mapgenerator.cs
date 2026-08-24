@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine.EventSystems;
 
-// 2. CHANGE 'MonoBehaviour' to 'NetworkBehaviour'
 public partial class MapGenerator : NetworkBehaviour
 {
     public enum MapType { RandomScatter, Maze_ARA, Caverns_LPA, Arena_DLite }
@@ -729,12 +728,21 @@ public partial class MapGenerator : NetworkBehaviour
         // 1. Update the master math grid
         grid[x, z] = true;
 
-        // 2. Spawn the standard 3D visual wall
+        // 2. Determine which prefab matches the current biome!
+        GameObject prefabToSpawn = wallPrefab;
+
+        if (currentBiome != null && currentBiome.obstaclePrefabs != null && currentBiome.obstaclePrefabs.Length > 0)
+        {
+            // Pick a biome-accurate wall/obstacle (e.g., maze wall, castle wall, cavern rock)
+            prefabToSpawn = currentBiome.obstaclePrefabs[Random.Range(0, currentBiome.obstaclePrefabs.Length)];
+        }
+
+        // 3. Spawn the biome-themed obstacle
         float offset = mapSize / 2f;
         Vector3 spawnPos = new Vector3(x - offset + 0.5f, 0f, z - offset + 0.5f);
-        Instantiate(wallPrefab, spawnPos, Quaternion.identity, transform);
+        Instantiate(prefabToSpawn, spawnPos, Quaternion.identity, transform);
 
-        // 3. Force the Pathfinding algorithms to recognize the new wall!
+        // 4. Force the Pathfinding algorithms to recognize the new wall!
         PathfindingGrid pg = FindFirstObjectByType<PathfindingGrid>();
         if (pg != null) 
         {

@@ -2,6 +2,7 @@ using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Sensors;
 using Unity.MLAgents.Actuators;
+using Unity.Netcode; // ADDED: So we can check who is the Server!
 
 public class HunterAgent : Agent
 {
@@ -10,13 +11,12 @@ public class HunterAgent : Agent
     public float moveSpeed = 7f; 
 
     [Header("Capture Settings")]
-    public float captureDistance = 2.5f; // המרחק שנחשב "תפיסה"
-    private float timeNearPlayer = 0f; // טיימר שניות
+    public float captureDistance = 2.5f; 
+    private float timeNearPlayer = 0f; 
 
     private Rigidbody rb;
-    private float previousDistance; // שומר את המרחק בזיכרון
+    private float previousDistance; 
     
-    // --- תוספת לאנימציה ---
     private Animator anim; 
 
     public override void Initialize()
@@ -25,7 +25,6 @@ public class HunterAgent : Agent
         rb.freezeRotation = true;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         
-        // --- תוספת לאנימציה ---
         anim = GetComponentInChildren<Animator>();
         
         FindPlayer();
@@ -42,6 +41,11 @@ public class HunterAgent : Agent
 
     public override void OnEpisodeBegin()
     {
+        // ==========================================
+        // THE FIX #1: WIPE THE TIMER ON RESTART!
+        // ==========================================
+        timeNearPlayer = 0f; 
+
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
@@ -50,15 +54,12 @@ public class HunterAgent : Agent
         bool positionFound = false;
         int safetyCounter = 0;
 
-        // מערכת השתגרות בטוחה על הרצפה שמונעת התנגשות במכשולים (עד 100 ניסיונות)
         while (!positionFound && safetyCounter < 100)
         {
             safetyCounter++;
             
-            // השתגרות בגובה 1.5 כדי לעמוד בדיוק על הקרקע (ללא צניחה חופשית)
             Vector3 randomPos = new Vector3(Random.Range(-20f, 20f), 1.5f, Random.Range(-20f, 20f));
 
-            // בדיקה שאין באזור מכשול (שכבת Obstacles)
             if (!Physics.CheckSphere(randomPos, 1f, LayerMask.GetMask("Obstacles")))
             {
                 transform.position = randomPos;
@@ -66,7 +67,6 @@ public class HunterAgent : Agent
             }
         }
 
-        // שומרים את המרחק הראשוני מיד כשהאפיזודה מתחילה
         if (playerTransform != null)
         {
             previousDistance = Vector3.Distance(transform.position, playerTransform.position);
@@ -81,25 +81,29 @@ public class HunterAgent : Agent
             
             if (dist <= captureDistance)
             {
-                timeNearPlayer += Time.deltaTime; // מתחיל לספור
-                
-                // אם עברו 3 שניות רצופות!
-                if (timeNearPlayer >= 3f) 
+                // ==========================================
+                // THE FIX #2: ONLY THE PC REFEREE CAN COUNT!
+                // ==========================================
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
                 {
-                    if (GameManager.Instance != null)
+                    timeNearPlayer += Time.deltaTime; 
+                    
+                    if (timeNearPlayer >= 3f) 
                     {
-                        GameManager.Instance.TriggerGameOver(); // הפעלת מסך הפסד
+                        if (GameManager.Instance != null)
+                        {
+                            GameManager.Instance.TriggerGameOver(); 
+                        }
+                        timeNearPlayer = 0f; 
                     }
-                    timeNearPlayer = 0f; // איפוס למקרה של ריסטרט
                 }
             }
             else
             {
-                timeNearPlayer = 0f; // השחקן הצליח להתרחק, הטיימר מתאפס
+                // If the player escapes, EVERYONE resets the timer
+                timeNearPlayer = 0f; 
             }
         }
-        
-        // החלק ששלט ב-isWalking נמחק מכאן כדי שהאנימציה תרוץ ברצף
     }
 
     public override void CollectObservations(VectorSensor sensor)
@@ -128,33 +132,27 @@ public class HunterAgent : Agent
         Vector3 moveForce = new Vector3(moveX, 0, moveZ) * moveSpeed;
         rb.linearVelocity = new Vector3(moveForce.x, rb.linearVelocity.y, moveForce.z);
 
-        // בונוס ויזואלי: גורם לבוט להסתובב עם הגוף לכיוון שאליו הוא הולך!
         if (moveForce.sqrMagnitude > 0.1f)
         {
             transform.forward = new Vector3(moveForce.x, 0, moveForce.z);
         }
 
-        // --- מערכת התגמולים (חם/קר) ---
         if (playerTransform != null)
         {
             float currentDistance = Vector3.Distance(transform.position, playerTransform.position);
 
             if (currentDistance < previousDistance)
             {
-                // התקרבת? קבל פרס!
                 AddReward(0.005f); 
             }
             else if (currentDistance > previousDistance)
             {
-                // התרחקת? קנס קטן.
                 AddReward(-0.005f);
             }
 
-            // מעדכנים את הזיכרון לצעד הבא
             previousDistance = currentDistance; 
         }
 
-        // עונש זמן מוקטן מאוד
         AddReward(-0.0001f);
     }
 
@@ -164,7 +162,6 @@ public class HunterAgent : Agent
         {
             Debug.Log("Target Captured!");
             SetReward(2.0f); 
-            // EndEpisode(); // <--- הפכנו להערה! הבוט לא ייעלם יותר ויתקע עליך 3 שניות!
         }
     }
 

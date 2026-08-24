@@ -7,7 +7,7 @@ public class NetworkUI : MonoBehaviour
 {
     private static NetworkUI instance;
 
-    private string ipAddress = "192.168.1."; 
+    private string ipAddress = "192.168."; 
     private bool showSettings = false;
     private bool showTutorial = false;
     private Vector2 tutorialScrollPosition = Vector2.zero;
@@ -47,14 +47,24 @@ public class NetworkUI : MonoBehaviour
         GUI.skin.horizontalSliderThumb.fixedHeight = 25; 
         GUI.skin.horizontalSliderThumb.fixedWidth = 25;
 
-        // Dark mode background tint for the whole UI area
         GUI.contentColor = Color.white; 
 
-        float scale = Application.isMobilePlatform ? 3.5f : 1.5f; 
+        // ==========================================
+        // THE FIX: DYNAMIC SCREEN SCALING & CENTERING
+        // ==========================================
+        float menuWidth = 600f;
+        float menuHeight = 850f; // Giving it a little extra breathing room
+
+        // Calculate scale so it perfectly fits the vertical height of the iPhone
+        float scale = Application.isMobilePlatform ? (Screen.height / menuHeight) : 1.2f; 
         GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1));
 
-        // Center the menu slightly better on the screen
-        GUILayout.BeginArea(new Rect(50, 40, 600, 800));
+        // Mathematically center the menu on the screen
+        float startX = (Screen.width / scale - menuWidth) / 2f;
+        float startY = (Screen.height / scale - menuHeight) / 2f;
+
+        // Draw the menu box at the calculated center point!
+        GUILayout.BeginArea(new Rect(startX, startY, menuWidth, menuHeight));
         
         if (NetworkManager.Singleton == null)
         {
@@ -170,8 +180,8 @@ public class NetworkUI : MonoBehaviour
         GUILayout.Label("• Goal: Alter the map topology in real-time to trap the Hunter and guide bots toward them.\n• Controls: Drag 1 finger to pan the camera, pinch 2 fingers to zoom, and tap any open tile to place a solid wall.", bodyStyle);
         GUILayout.Space(15);
 
-        GUILayout.Label("Hunter Bots & Hazards", headerStyle);
-        GUILayout.Label("• Bots constantly hunt down the player using dynamic pathfinding.\n• If a bot remains within proximity of the Hunter for 3 seconds, the game is over.", bodyStyle);
+        GUILayout.Label("Hunter Bots", headerStyle);
+        GUILayout.Label("• Bots constantly hunt down the Hunter using dynamic pathfinding.\n• If a bot remains within proximity of the Hunter for 3 seconds, the game is over.", bodyStyle);
 
         GUILayout.EndScrollView();
         GUILayout.Space(15);
